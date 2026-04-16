@@ -1,0 +1,25 @@
+name: Compile JSX
+
+on:
+  push:
+    paths:
+      - 'suno-track.jsx'
+      - '.github/workflows/build.yml'
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - run: npm install --no-save @babel/cli @babel/core @babel/preset-react
+      - run: npx babel suno-track.jsx --out-file suno-track.js --presets=@babel/preset-react
+      - uses: stefanzweifel/git-auto-commit-action@v5
+        with:
+          commit_message: 'chore: recompile suno-track.js'
+          file_pattern: 'suno-track.js'
