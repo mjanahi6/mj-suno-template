@@ -53,49 +53,39 @@ const GLOBAL_CSS = `
 // ============================================================
 // GENRE THEMES
 // ============================================================
+const buildTheme = (accent, label) => ({
+  accent,
+  accentDim: accent + "33",
+  accentGlow: accent + "18",
+  label
+});
 const themes = {
-  psychedelic: {
-    accent: "#e8613a",
-    accentDim: "#e8613a33",
-    accentGlow: "#e8613a18",
-    label: "Psychedelic"
-  },
-  electronic: {
-    accent: "#38bdf8",
-    accentDim: "#38bdf833",
-    accentGlow: "#38bdf818",
-    label: "Electronic"
-  },
-  hiphop: {
-    accent: "#f5c842",
-    accentDim: "#f5c84233",
-    accentGlow: "#f5c84218",
-    label: "Hip-Hop"
-  },
-  rnb: {
-    accent: "#c084fc",
-    accentDim: "#c084fc33",
-    accentGlow: "#c084fc18",
-    label: "R&B / Soul"
-  },
-  lofi: {
-    accent: "#86efac",
-    accentDim: "#86efac33",
-    accentGlow: "#86efac18",
-    label: "Lo-Fi"
-  }
+  psychedelic: buildTheme("#e8613a", "Psychedelic"),
+  electronic: buildTheme("#38bdf8", "Electronic"),
+  melodicHouse: buildTheme("#06b6d4", "Melodic House"),
+  hiphop: buildTheme("#f5c842", "Hip-Hop"),
+  classicHipHop: buildTheme("#d97706", "Classic Hip-Hop"),
+  darkHipHop: buildTheme("#a855f7", "Dark Hip-Hop"),
+  fire: buildTheme("#ff5722", "Fire"),
+  rnb: buildTheme("#c084fc", "R&B / Soul"),
+  lofi: buildTheme("#86efac", "Lo-Fi"),
+  triphop: buildTheme("#94a3b8", "Trip-Hop")
 };
 
 // ============================================================
 // CHECKLIST LOGIC
 // ============================================================
 function buildChecklist(data) {
-  const styleTags = data.stylePrompt.split(",").length;
-  const hasExclude = data.excludeStyles && data.excludeStyles.trim().length > 0;
-  const hasBPM = /\d+\s*bpm/i.test(data.stylePrompt);
-  const hasStructure = data.lyrics.includes("[Verse") || data.lyrics.includes("[Chorus") || data.lyrics.includes("[Hook");
-  const hasFadeOut = data.lyrics.includes("[Fade Out]") || data.lyrics.includes("[End]");
-  const tagCount = (data.lyrics.match(/^\[/gm) || []).length;
+  const stylePrompt = data.stylePrompt || "";
+  const lyrics = data.lyrics || "";
+  const excludeStyles = data.excludeStyles || "";
+  const meta = data.metadata || {};
+  const styleTags = stylePrompt ? stylePrompt.split(",").length : 0;
+  const hasExclude = excludeStyles.trim().length > 0;
+  const hasBPM = /\d+\s*bpm/i.test(stylePrompt);
+  const hasStructure = lyrics.includes("[Verse") || lyrics.includes("[Chorus") || lyrics.includes("[Hook");
+  const hasFadeOut = lyrics.includes("[Fade Out]") || lyrics.includes("[End]");
+  const tagCount = (lyrics.match(/^\[/gm) || []).length;
   return [{
     label: "Style tags (4–8 ideal, ≤10 ok)",
     ok: styleTags >= 4 && styleTags <= 10,
@@ -103,7 +93,7 @@ function buildChecklist(data) {
   }, {
     label: "BPM in style prompt",
     ok: hasBPM,
-    note: hasBPM ? `${data.metadata.BPM} BPM` : "Add BPM"
+    note: hasBPM ? `${meta.BPM ?? "?"} BPM` : "Add BPM"
   }, {
     label: "Exclude field filled",
     ok: hasExclude,
@@ -285,7 +275,7 @@ function StylePills({
   accent,
   dark
 }) {
-  const pills = text.split(",").map(t => t.trim()).filter(Boolean);
+  const pills = (text || "").split(",").map(t => t.trim()).filter(Boolean);
   return /*#__PURE__*/React.createElement("div", {
     style: {
       display: "flex",
@@ -323,10 +313,12 @@ function StylePills({
 // GENERATION SETTINGS
 // ============================================================
 function GenerationSettings({
-  settings,
+  settings: rawSettings,
   accent,
   dark
 }) {
+  const settings = rawSettings || {};
+  const clamp = v => Math.max(0, Math.min(100, Number(v) || 0));
   const rowBg = dark ? "#0d0d1a" : "#f8f8f4";
   const rowBorder = dark ? "#16162a" : "#e4e4dc";
   const textMain = dark ? "#c0b8d4" : "#1a1a2e";
@@ -449,13 +441,13 @@ function GenerationSettings({
     options: ["Manual", "Auto"]
   }), /*#__PURE__*/React.createElement(SliderRow, {
     label: "Weirdness",
-    value: settings.weirdness
+    value: clamp(settings.weirdness)
   }), /*#__PURE__*/React.createElement(SliderRow, {
     label: "Style Influence",
-    value: settings.styleInfluence
+    value: clamp(settings.styleInfluence)
   }), /*#__PURE__*/React.createElement(SliderRow, {
     label: "Audio Influence",
-    value: settings.audioInfluence
+    value: clamp(settings.audioInfluence)
   }));
 }
 
@@ -577,7 +569,7 @@ function SectionNavigator({
   animClass = ""
 }) {
   const sections = [];
-  lyrics.split("\n").forEach((line, i) => {
+  (lyrics || "").split("\n").forEach((line, i) => {
     if (line.startsWith("[") && !line.startsWith("([")) {
       const label = line.replace(/\[|\]/g, "").split("|")[0].trim();
       const keys = ["Verse", "Chorus", "Hook", "Bridge", "Intro", "Outro", "Build", "Drop", "Breakdown", "Pre-Chorus", "Post-Chorus", "Instrumental", "Silence"];
@@ -659,7 +651,7 @@ function LyricsRenderer({
   dark
 }) {
   const [hoveredSection, setHoveredSection] = useState(null);
-  const lines = lyrics.split("\n");
+  const lines = (lyrics || "").split("\n");
   const rendered = lines.map((line, i) => {
     const isTag = line.startsWith("[");
     const isAdLib = line.startsWith("(");
@@ -697,10 +689,15 @@ function SunoTrack({
   trackData
 }) {
   const [dark, setDark] = useState(true);
-  const theme = themes[trackData.genre] || themes.psychedelic;
+  const data = trackData || {};
+  const meta = data.metadata || {};
+  const settings = data.settings || {};
+  const theme = themes[data.genre] || themes.psychedelic;
   const {
     accent
   } = theme;
+  const dash = "—";
+  const safeBPM = Number(meta.BPM) > 0 ? Number(meta.BPM) : 100;
   const bg = dark ? "#07070f" : "#f8f8f2";
   const cardBg = dark ? "#0a0a18" : "#ffffff";
   const cardBorder = dark ? "#14142a" : "#e8e8e0";
@@ -750,13 +747,13 @@ function SunoTrack({
       margin: "0 0 6px 0",
       letterSpacing: "0.14em"
     }
-  }, trackData.title), /*#__PURE__*/React.createElement("div", {
+  }, data.title || "Untitled"), /*#__PURE__*/React.createElement("div", {
     style: {
       fontSize: "11px",
       color: textDim,
       letterSpacing: "0.1em"
     }
-  }, trackData.metadata.Key, " \xB7 ", trackData.version, trackData.voice ? ` · Voice: ${trackData.voice}` : "")), /*#__PURE__*/React.createElement("div", {
+  }, meta.Key || dash, " \xB7 ", data.version || "v1", data.voice ? ` · Voice: ${data.voice}` : "")), /*#__PURE__*/React.createElement("div", {
     style: {
       display: "flex",
       flexDirection: "column",
@@ -787,7 +784,7 @@ function SunoTrack({
       e.currentTarget.style.color = textDim;
     }
   }, dark ? "☀ Light" : "☾ Dark"), /*#__PURE__*/React.createElement(BPMDisplay, {
-    bpm: trackData.metadata.BPM,
+    bpm: safeBPM,
     accent: accent,
     dark: !dark
   })))), /*#__PURE__*/React.createElement(CollapsibleSection, {
@@ -803,14 +800,14 @@ function SunoTrack({
       justifyContent: "flex-end"
     }
   }, /*#__PURE__*/React.createElement(CopyButton, {
-    text: trackData.stylePrompt,
+    text: data.stylePrompt || "",
     label: "Copy Style Prompt",
     accent: accent
   })), /*#__PURE__*/React.createElement(StylePills, {
-    text: trackData.stylePrompt,
+    text: data.stylePrompt || "",
     accent: accent,
     dark: !dark
-  })), trackData.excludeStyles && /*#__PURE__*/React.createElement(CollapsibleSection, {
+  })), data.excludeStyles && /*#__PURE__*/React.createElement(CollapsibleSection, {
     title: "Exclude Styles",
     accent: accent,
     dark: !dark,
@@ -823,7 +820,7 @@ function SunoTrack({
       justifyContent: "flex-end"
     }
   }, /*#__PURE__*/React.createElement(CopyButton, {
-    text: trackData.excludeStyles,
+    text: data.excludeStyles,
     label: "Copy Exclude Styles",
     accent: accent
   })), /*#__PURE__*/React.createElement("div", {
@@ -836,7 +833,7 @@ function SunoTrack({
       flexWrap: "wrap",
       gap: "6px"
     }
-  }, trackData.excludeStyles.split(",").map((t, i) => /*#__PURE__*/React.createElement("span", {
+  }, data.excludeStyles.split(",").map((t, i) => /*#__PURE__*/React.createElement("span", {
     key: i,
     style: {
       padding: "3px 9px",
@@ -870,11 +867,11 @@ function SunoTrack({
       textTransform: "uppercase"
     }
   }, "Engineered Lyrics & Meta-Tags"), /*#__PURE__*/React.createElement(CopyButton, {
-    text: trackData.lyrics,
+    text: data.lyrics || "",
     label: "Copy Lyrics",
     accent: accent
   })), /*#__PURE__*/React.createElement(SectionNavigator, {
-    lyrics: trackData.lyrics,
+    lyrics: data.lyrics || "",
     accent: accent,
     dark: !dark,
     animClass: ""
@@ -888,7 +885,7 @@ function SunoTrack({
       boxShadow: dark ? `0 0 40px ${accent}18, 0 0 80px ${accent}08, 0 0 0 1px ${accent}22` : `0 2px 20px rgba(0,0,0,0.10)`
     }
   }, /*#__PURE__*/React.createElement(LyricsRenderer, {
-    lyrics: trackData.lyrics,
+    lyrics: data.lyrics || "",
     accent: accent,
     dark: !dark
   }))), /*#__PURE__*/React.createElement(CollapsibleSection, {
@@ -898,11 +895,11 @@ function SunoTrack({
     defaultOpen: true,
     animClass: "suno-animate-5"
   }, /*#__PURE__*/React.createElement(GenerationSettings, {
-    settings: trackData.settings,
+    settings: settings,
     accent: accent,
     dark: !dark
   })), /*#__PURE__*/React.createElement(Checklist, {
-    data: trackData,
+    data: data,
     accent: accent,
     dark: !dark,
     animClass: "suno-animate-5"
@@ -928,7 +925,7 @@ function SunoTrack({
       wordBreak: "break-word",
       boxShadow: cardShadow
     }
-  }, JSON.stringify(trackData.metadata, null, 2))), /*#__PURE__*/React.createElement("div", {
+  }, JSON.stringify(meta, null, 2))), /*#__PURE__*/React.createElement("div", {
     className: "suno-animate suno-animate-6",
     style: {
       marginTop: "24px",
@@ -948,7 +945,7 @@ function SunoTrack({
     style: {
       color: accent
     }
-  }, "Suno tip:"), " Paste Style Prompt \u2192 Style of Music field. Paste Lyrics \u2192 Lyrics field. Paste Exclude Styles \u2192 Exclude Styles field. Use Custom Mode for all three.", trackData.voice ? ` Set Voice/Persona to "${trackData.voice}".` : ""))));
+  }, "Suno tip:"), " Paste Style Prompt \u2192 Style of Music field. Paste Lyrics \u2192 Lyrics field. Paste Exclude Styles \u2192 Exclude Styles field. Use Custom Mode for all three.", data.voice ? ` Set Voice/Persona to "${data.voice}".` : ""))));
 }
 
 // ============================================================
