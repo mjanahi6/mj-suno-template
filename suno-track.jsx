@@ -49,28 +49,40 @@ const GLOBAL_CSS = `
 // ============================================================
 // GENRE THEMES
 // ============================================================
+const buildTheme = (accent, label) => ({
+  accent, accentDim: accent + "33", accentGlow: accent + "18", label,
+});
 const themes = {
-  psychedelic: { accent: "#e8613a", accentDim: "#e8613a33", accentGlow: "#e8613a18", label: "Psychedelic" },
-  electronic:  { accent: "#38bdf8", accentDim: "#38bdf833", accentGlow: "#38bdf818", label: "Electronic" },
-  hiphop:      { accent: "#f5c842", accentDim: "#f5c84233", accentGlow: "#f5c84218", label: "Hip-Hop" },
-  rnb:         { accent: "#c084fc", accentDim: "#c084fc33", accentGlow: "#c084fc18", label: "R&B / Soul" },
-  lofi:        { accent: "#86efac", accentDim: "#86efac33", accentGlow: "#86efac18", label: "Lo-Fi" },
+  psychedelic:   buildTheme("#e8613a", "Psychedelic"),
+  electronic:    buildTheme("#38bdf8", "Electronic"),
+  melodicHouse:  buildTheme("#06b6d4", "Melodic House"),
+  hiphop:        buildTheme("#f5c842", "Hip-Hop"),
+  classicHipHop: buildTheme("#d97706", "Classic Hip-Hop"),
+  darkHipHop:    buildTheme("#a855f7", "Dark Hip-Hop"),
+  fire:          buildTheme("#ff5722", "Fire"),
+  rnb:           buildTheme("#c084fc", "R&B / Soul"),
+  lofi:          buildTheme("#86efac", "Lo-Fi"),
+  triphop:       buildTheme("#94a3b8", "Trip-Hop"),
 };
 
 // ============================================================
 // CHECKLIST LOGIC
 // ============================================================
 function buildChecklist(data) {
-  const styleTags = data.stylePrompt.split(",").length;
-  const hasExclude = data.excludeStyles && data.excludeStyles.trim().length > 0;
-  const hasBPM = /\d+\s*bpm/i.test(data.stylePrompt);
-  const hasStructure = data.lyrics.includes("[Verse") || data.lyrics.includes("[Chorus") || data.lyrics.includes("[Hook");
-  const hasFadeOut = data.lyrics.includes("[Fade Out]") || data.lyrics.includes("[End]");
-  const tagCount = (data.lyrics.match(/^\[/gm) || []).length;
+  const stylePrompt = data.stylePrompt || "";
+  const lyrics = data.lyrics || "";
+  const excludeStyles = data.excludeStyles || "";
+  const meta = data.metadata || {};
+  const styleTags = stylePrompt ? stylePrompt.split(",").length : 0;
+  const hasExclude = excludeStyles.trim().length > 0;
+  const hasBPM = /\d+\s*bpm/i.test(stylePrompt);
+  const hasStructure = lyrics.includes("[Verse") || lyrics.includes("[Chorus") || lyrics.includes("[Hook");
+  const hasFadeOut = lyrics.includes("[Fade Out]") || lyrics.includes("[End]");
+  const tagCount = (lyrics.match(/^\[/gm) || []).length;
 
   return [
     { label: "Style tags (4–8 ideal, ≤10 ok)", ok: styleTags >= 4 && styleTags <= 10, note: `${styleTags} tags` },
-    { label: "BPM in style prompt", ok: hasBPM, note: hasBPM ? `${data.metadata.BPM} BPM` : "Add BPM" },
+    { label: "BPM in style prompt", ok: hasBPM, note: hasBPM ? `${meta.BPM ?? "?"} BPM` : "Add BPM" },
     { label: "Exclude field filled", ok: hasExclude, note: hasExclude ? "Set" : "Missing" },
     { label: "Song structure present", ok: hasStructure, note: hasStructure ? "Structure ✓" : "Add structure" },
     { label: "Clean ending tag", ok: hasFadeOut, note: hasFadeOut ? "[End] ✓" : "Add [End]" },
@@ -218,7 +230,7 @@ function CollapsibleSection({ title, children, accent, dark, defaultOpen = true,
 // STYLE PROMPT PILLS
 // ============================================================
 function StylePills({ text, accent, dark }) {
-  const pills = text.split(",").map(t => t.trim()).filter(Boolean);
+  const pills = (text || "").split(",").map(t => t.trim()).filter(Boolean);
 
   return (
     <div style={{ display: "flex", flexWrap: "wrap", gap: "6px", padding: "14px 16px", background: dark ? "#0a0a18" : "#ffffff", border: `1px solid ${dark ? "#14142a" : "#e8e8e0"}`, borderRadius: "6px" }}>
@@ -254,7 +266,9 @@ function StylePills({ text, accent, dark }) {
 // ============================================================
 // GENERATION SETTINGS
 // ============================================================
-function GenerationSettings({ settings, accent, dark }) {
+function GenerationSettings({ settings: rawSettings, accent, dark }) {
+  const settings = rawSettings || {};
+  const clamp = (v) => Math.max(0, Math.min(100, Number(v) || 0));
   const rowBg     = dark ? "#0d0d1a" : "#f8f8f4";
   const rowBorder = dark ? "#16162a" : "#e4e4dc";
   const textMain  = dark ? "#c0b8d4" : "#1a1a2e";
@@ -336,9 +350,9 @@ function GenerationSettings({ settings, accent, dark }) {
     <div>
       <ToggleRow label="Vocal Gender" value={settings.vocalGender} options={["Male", "Female"]} />
       <ToggleRow label="Lyrics Mode"  value={settings.lyricsMode}  options={["Manual", "Auto"]} />
-      <SliderRow label="Weirdness"        value={settings.weirdness} />
-      <SliderRow label="Style Influence"  value={settings.styleInfluence} />
-      <SliderRow label="Audio Influence"  value={settings.audioInfluence} />
+      <SliderRow label="Weirdness"        value={clamp(settings.weirdness)} />
+      <SliderRow label="Style Influence"  value={clamp(settings.styleInfluence)} />
+      <SliderRow label="Audio Influence"  value={clamp(settings.audioInfluence)} />
     </div>
   );
 }
@@ -416,7 +430,7 @@ function Checklist({ data, accent, dark, animClass = "" }) {
 // ============================================================
 function SectionNavigator({ lyrics, accent, dark, animClass = "" }) {
   const sections = [];
-  lyrics.split("\n").forEach((line, i) => {
+  (lyrics || "").split("\n").forEach((line, i) => {
     if (line.startsWith("[") && !line.startsWith("([")) {
       const label = line.replace(/\[|\]/g, "").split("|")[0].trim();
       const keys = ["Verse", "Chorus", "Hook", "Bridge", "Intro", "Outro", "Build", "Drop", "Breakdown", "Pre-Chorus", "Post-Chorus", "Instrumental", "Silence"];
@@ -493,7 +507,7 @@ function SectionNavigator({ lyrics, accent, dark, animClass = "" }) {
 // ============================================================
 function LyricsRenderer({ lyrics, accent, dark }) {
   const [hoveredSection, setHoveredSection] = useState(null);
-  const lines = lyrics.split("\n");
+  const lines = (lyrics || "").split("\n");
 
   const rendered = lines.map((line, i) => {
     const isTag = line.startsWith("[");
@@ -544,8 +558,13 @@ function LyricsRenderer({ lyrics, accent, dark }) {
 // ============================================================
 function SunoTrack({ trackData }) {
   const [dark, setDark] = useState(true);
-  const theme = themes[trackData.genre] || themes.psychedelic;
+  const data = trackData || {};
+  const meta = data.metadata || {};
+  const settings = data.settings || {};
+  const theme = themes[data.genre] || themes.psychedelic;
   const { accent } = theme;
+  const dash = "—";
+  const safeBPM = Number(meta.BPM) > 0 ? Number(meta.BPM) : 100;
 
   const bg = dark ? "#07070f" : "#f8f8f2";
   const cardBg = dark ? "#0a0a18" : "#ffffff";
@@ -584,10 +603,10 @@ function SunoTrack({ trackData }) {
                 Anti-Cheese Elite Writing Lab · {theme.label}
               </div>
               <h1 style={{ fontSize: "clamp(28px, 6vw, 48px)", fontWeight: "300", color: dark ? "#e8e0f8" : "#0a0a1a", margin: "0 0 6px 0", letterSpacing: "0.14em" }}>
-                {trackData.title}
+                {data.title || "Untitled"}
               </h1>
               <div style={{ fontSize: "11px", color: textDim, letterSpacing: "0.1em" }}>
-                {trackData.metadata.Key} · {trackData.version}{trackData.voice ? ` · Voice: ${trackData.voice}` : ""}
+                {meta.Key || dash} · {data.version || "v1"}{data.voice ? ` · Voice: ${data.voice}` : ""}
               </div>
             </div>
             <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: "14px" }}>
@@ -611,7 +630,7 @@ function SunoTrack({ trackData }) {
               >
                 {dark ? "☀ Light" : "☾ Dark"}
               </button>
-              <BPMDisplay bpm={trackData.metadata.BPM} accent={accent} dark={!dark} />
+              <BPMDisplay bpm={safeBPM} accent={accent} dark={!dark} />
             </div>
           </div>
         </div>
@@ -619,16 +638,16 @@ function SunoTrack({ trackData }) {
         {/* STYLE PROMPT */}
         <CollapsibleSection title="Style Prompt" accent={accent} dark={!dark} defaultOpen={true} animClass="suno-animate-2">
           <div style={{ marginBottom: "8px", display: "flex", justifyContent: "flex-end" }}>
-            <CopyButton text={trackData.stylePrompt} label="Copy Style Prompt" accent={accent} />
+            <CopyButton text={(data.stylePrompt || "")} label="Copy Style Prompt" accent={accent} />
           </div>
-          <StylePills text={trackData.stylePrompt} accent={accent} dark={!dark} />
+          <StylePills text={(data.stylePrompt || "")} accent={accent} dark={!dark} />
         </CollapsibleSection>
 
         {/* EXCLUDE STYLES */}
-        {trackData.excludeStyles && (
+        {data.excludeStyles && (
           <CollapsibleSection title="Exclude Styles" accent={accent} dark={!dark} defaultOpen={true} animClass="suno-animate-3">
             <div style={{ marginBottom: "8px", display: "flex", justifyContent: "flex-end" }}>
-              <CopyButton text={trackData.excludeStyles} label="Copy Exclude Styles" accent={accent} />
+              <CopyButton text={data.excludeStyles} label="Copy Exclude Styles" accent={accent} />
             </div>
             <div style={{
               background: cardBg,
@@ -639,7 +658,7 @@ function SunoTrack({ trackData }) {
               flexWrap: "wrap",
               gap: "6px",
             }}>
-              {trackData.excludeStyles.split(",").map((t, i) => (
+              {data.excludeStyles.split(",").map((t, i) => (
                 <span key={i} style={{
                   padding: "3px 9px",
                   background: "#ff44440d",
@@ -663,9 +682,9 @@ function SunoTrack({ trackData }) {
             <div style={{ fontSize: "11px", color: textDim, letterSpacing: "0.1em", textTransform: "uppercase" }}>
               Engineered Lyrics & Meta-Tags
             </div>
-            <CopyButton text={trackData.lyrics} label="Copy Lyrics" accent={accent} />
+            <CopyButton text={(data.lyrics || "")} label="Copy Lyrics" accent={accent} />
           </div>
-          <SectionNavigator lyrics={trackData.lyrics} accent={accent} dark={!dark} animClass="" />
+          <SectionNavigator lyrics={(data.lyrics || "")} accent={accent} dark={!dark} animClass="" />
           <div style={{
             background: cardBg,
             border: `1px solid ${accent}33`,
@@ -676,17 +695,17 @@ function SunoTrack({ trackData }) {
               ? `0 0 40px ${accent}18, 0 0 80px ${accent}08, 0 0 0 1px ${accent}22`
               : `0 2px 20px rgba(0,0,0,0.10)`,
           }}>
-            <LyricsRenderer lyrics={trackData.lyrics} accent={accent} dark={!dark} />
+            <LyricsRenderer lyrics={(data.lyrics || "")} accent={accent} dark={!dark} />
           </div>
         </div>
 
         {/* GENERATION SETTINGS */}
         <CollapsibleSection title="Generation Settings" accent={accent} dark={!dark} defaultOpen={true} animClass="suno-animate-5">
-          <GenerationSettings settings={trackData.settings} accent={accent} dark={!dark} />
+          <GenerationSettings settings={settings} accent={accent} dark={!dark} />
         </CollapsibleSection>
 
         {/* CHECKLIST */}
-        <Checklist data={trackData} accent={accent} dark={!dark} animClass="suno-animate-5" />
+        <Checklist data={data} accent={accent} dark={!dark} animClass="suno-animate-5" />
 
         {/* METADATA */}
         <CollapsibleSection title="Track Metadata" accent={accent} dark={!dark} defaultOpen={false} animClass="suno-animate-5">
@@ -705,7 +724,7 @@ function SunoTrack({ trackData }) {
             wordBreak: "break-word",
             boxShadow: cardShadow,
           }}>
-            {JSON.stringify(trackData.metadata, null, 2)}
+            {JSON.stringify(meta, null, 2)}
           </pre>
         </CollapsibleSection>
 
@@ -722,7 +741,7 @@ function SunoTrack({ trackData }) {
           }}
         >
           <div style={{ fontSize: "11px", color: textDim, lineHeight: "1.8" }}>
-            <span style={{ color: accent }}>Suno tip:</span> Paste Style Prompt → Style of Music field. Paste Lyrics → Lyrics field. Paste Exclude Styles → Exclude Styles field. Use Custom Mode for all three.{trackData.voice ? ` Set Voice/Persona to "${trackData.voice}".` : ""}
+            <span style={{ color: accent }}>Suno tip:</span> Paste Style Prompt → Style of Music field. Paste Lyrics → Lyrics field. Paste Exclude Styles → Exclude Styles field. Use Custom Mode for all three.{data.voice ? ` Set Voice/Persona to "${data.voice}".` : ""}
           </div>
         </div>
       </div>
